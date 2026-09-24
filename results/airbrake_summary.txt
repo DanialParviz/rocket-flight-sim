@@ -1,0 +1,6 @@
+Runs: 150 | target 9000 ft AGL
+No brakes    mean    9811 ft | std   542 ft | mean abs error   845 ft
+With brakes  mean    9000 ft | std   102 ft | mean abs error    34 ft
+Std reduction: 81%
+Runs that overshoot target by >100 ft: no brakes 137, with brakes 0
+Runs that fell short by >100 ft (brakes cannot add altitude): 6

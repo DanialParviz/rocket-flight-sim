@@ -11,6 +11,9 @@ LAUNCH_LAT = 32.99          # deg (New Mexico high desert, illustrative)
 LAUNCH_LON = -106.97        # deg
 LAUNCH_ELEVATION_M = 1400   # m above sea level
 
+# Generic drag table: [Mach, Cd] (used by the rocket model and the airbrake predictor)
+DRAG_TABLE = [(0.1, 0.42), (0.8, 0.45), (1.2, 0.60), (2.0, 0.50)]
+
 # Simple generic thrust curve: [time (s), thrust (N)]
 THRUST_CURVE = [
     (0.0, 0.0), (0.05, 2600.0), (0.3, 2400.0), (1.5, 2100.0),
@@ -24,7 +27,7 @@ def make_environment(wind_speed=0.0, wind_dir_deg=90.0):
     env.set_atmospheric_model(
         type="custom_atmosphere",
         pressure=None,
-        temperature=300,
+        temperature=None,   # None -> standard atmosphere (ISA)
         wind_u=[(0, wind_speed * math.sin(math.radians(wind_dir_deg)))],
         wind_v=[(0, wind_speed * math.cos(math.radians(wind_dir_deg)))],
     )
@@ -53,13 +56,13 @@ def make_motor(thrust_scale=1.0):
     )
 
 
-def make_rocket(motor, dry_mass=19.0, cd_scale=1.0):
+def make_rocket(motor, dry_mass=19.0, cd_scale=1.0, airbrake_controller=None):
     rocket = Rocket(
         radius=127 / 2000,
         mass=dry_mass,
         inertia=(6.321, 6.321, 0.034),
-        power_off_drag=[(0.1, 0.42 * cd_scale), (0.8, 0.45 * cd_scale), (1.2, 0.60 * cd_scale), (2.0, 0.50 * cd_scale)],
-        power_on_drag=[(0.1, 0.42 * cd_scale), (0.8, 0.45 * cd_scale), (1.2, 0.60 * cd_scale), (2.0, 0.50 * cd_scale)],
+        power_off_drag=[(m, c * cd_scale) for m, c in DRAG_TABLE],
+        power_on_drag=[(m, c * cd_scale) for m, c in DRAG_TABLE],
         center_of_mass_without_motor=0,
         coordinate_system_orientation="tail_to_nose",
     )
@@ -68,6 +71,15 @@ def make_rocket(motor, dry_mass=19.0, cd_scale=1.0):
     rocket.add_nose(length=0.55829, kind="vonKarman", position=1.278)
     rocket.add_trapezoidal_fins(n=4, root_chord=0.120, tip_chord=0.060, span=0.110,
                                 position=-1.04956, cant_angle=0)
+    if airbrake_controller is not None:
+        rocket.add_air_brakes(
+            drag_coefficient_curve=lambda deployment, mach: 1.2 * deployment,
+            controller_function=airbrake_controller,
+            sampling_rate=10,
+            clamp=True,
+            initial_observed_variables=[0.0, 0.0, 0.0],
+            name="AirBrakes",
+        )
     rocket.add_parachute("Main", cd_s=10.0, trigger=800, sampling_rate=105, lag=1.5)
     return rocket
 
